@@ -1,0 +1,5 @@
+data/train/
+data/*.zip
+exp/
+__pycache__/
+models/
