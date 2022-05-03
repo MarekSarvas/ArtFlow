@@ -104,7 +104,7 @@ elif args.operator == 'adain':
 elif args.operator == 'decorator':
     from glow_decorator import Glow
 elif args.operator == 'att':
-    from glowAdaAttN import Glow
+    from glow_AdaAttN import Glow
 else:
     raise('Not implemented operator', args.operator)
     

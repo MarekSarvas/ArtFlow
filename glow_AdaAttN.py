@@ -6,6 +6,7 @@ from scipy import linalg as la
 
 from glow_blocks.flow_modules import Flow
 from glow_blocks.style_trans_modules import AdaIN
+from glow_blocks.adaAttN import AdaAttN
 
 class Block(nn.Module):
     def __init__(self, in_channel, n_flow, affine=True, conv_lu=True):
@@ -55,7 +56,8 @@ class Glow(nn.Module):
             
         self.blocks.append(Block(n_channel, n_flow, affine=affine))
         
-        self.adain = AdaIN()
+        # FIXME: are the dimensions correct? parametrize them..
+        self.adaattn = AdaAttN(v_dim=48, qk_dim=48)
         
     def forward(self, input, forward=True, style=None):
         if forward:
@@ -68,13 +70,13 @@ class Glow(nn.Module):
         for block in self.blocks:
             z = block(z)
         if style is not None:
-            z = self.adain(z, style)
+            z = self.adaattn(z, style, z, style)
         return z
 
     def _reverse(self, z, style=None):
         out = z
         if style is not None:
-            out = self.adain(out, style)
+            out = self.adaattn(out, style, out, style)
         for i, block in enumerate(self.blocks[::-1]):
             out = block.reverse(out)
         return out
