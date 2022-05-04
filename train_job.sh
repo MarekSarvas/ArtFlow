@@ -11,6 +11,11 @@ export BASE=/storage/brno2/home/pirxus/
 DATA_TRAIN=$BASE/artflow_data/train
 DATA=$SCRATCHDIR/data     
 
+export EXP_ID=artflow_8_2_2
+export N_BLOCK=2
+export N_FLOW=8
+export BATCH_SIZE=2
+export MAX_ITER=120000
 
 # append a line to a file "jobs_info.txt" containing the ID of the job, the hostname of node it is run on and the path to a scratch directory
 # this information helps to find a scratch directory in case the job fails and you need to remove the scratch directory manually     

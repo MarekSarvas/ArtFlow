@@ -8,7 +8,7 @@ stop_stage=3
 verbose=0
 ngpus=1
  
-exp_id=adaattn_run1
+exp_id=$EXP_ID
                        
 # =================== PATHS ====================
 MAIN_PATH=${PWD}
@@ -68,9 +68,10 @@ if [ ${stage} -le 3 ] &&[ ${stop_stage} -ge 3 ]; then
         --content_dir "${TRAIN_DATA_PATH}/coco"  \
         --style_dir "${TRAIN_DATA_PATH}/wikiart" \
         --save_dir=${EXP_FOLDER}/${exp_id} \
-        --n_flow 8       \
-        --n_block 2      \
-        --batch_size 1   \
+        --n_flow $N_FLOW       \
+        --n_block $N_BLOCK      \
+        --batch_size $BATCH_SIZE   \
+        --max_iter $MAX_ITER    \
         --operator att
 fi
 # TODO: update parameters
