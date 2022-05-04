@@ -8,7 +8,7 @@ stop_stage=3
 verbose=0
 ngpus=1
  
-exp_id=test2
+exp_id=adaattn_run1
                        
 # =================== PATHS ====================
 MAIN_PATH=${PWD}
@@ -17,7 +17,12 @@ TRAIN_DATA_PATH=${MAIN_PATH}/data/train
 STYLE_PATH=${MAIN_PATH}/data/style
 CONTENT_PATH=${MAIN_PATH}/data/content            
                                    
-EXP_FOLDER=${MAIN_PATH}/exp
+if [ -n "$BASE" ]; then
+    EXP_FOLDER=${BASE}/experiment
+else
+    EXP_FOLDER=${MAIN_PATH}/experiment
+fi
+
 
 mkdir -pv ${TRAIN_DATA_PATH}
 mkdir -pv ${EXP_FOLDER}
