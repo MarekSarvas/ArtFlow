@@ -31,8 +31,8 @@ class AdaAttN(nn.Module):
         self.max_sample = max_sample
 
     def forward(self, content, style, content_key, style_key, seed=None):
-        F = self.f(content_key)
-        G = self.g(style_key)
+        F = self.f(mean_variance_norm(content_key))
+        G = self.g(mean_variance_norm(style_key))
         H = self.h(style)
         b, _, h_g, w_g = G.size()
         G = G.view(b, -1, w_g * h_g).contiguous()
