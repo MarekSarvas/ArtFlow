@@ -57,7 +57,7 @@ class Glow(nn.Module):
         self.blocks.append(Block(n_channel, n_flow, affine=affine))
         
         # FIXME: are the dimensions correct? parametrize them..
-        self.adaattn = AdaAttN(in_planes=12 * n_block, key_planes=12 * n_block)
+        self.adaattn = AdaAttN(in_planes= 3 * (4**n_block), key_planes=3 * (4**n_block))
         
     def forward(self, input, forward=True, style=None):
         if forward:
