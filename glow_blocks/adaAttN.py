@@ -20,10 +20,9 @@ def mean_variance_norm(x):
 
 
 class AdaAttN(nn.Module):
-    def __init__(self, in_planes, max_sample=256 * 256, key_planes=None):
+
+    def __init__(self, in_planes, key_planes, max_sample=256*256):
         super(AdaAttN, self).__init__()
-        if key_planes is None:
-            key_planes = in_planes
         self.f = nn.Conv2d(key_planes, key_planes, (1, 1))
         self.g = nn.Conv2d(key_planes, key_planes, (1, 1))
         self.h = nn.Conv2d(in_planes, in_planes, (1, 1))
@@ -57,32 +56,24 @@ class AdaAttN(nn.Module):
         mean = mean.view(b, h, w, -1).permute(0, 3, 1, 2).contiguous()
         std = std.view(b, h, w, -1).permute(0, 3, 1, 2).contiguous()
         return std * mean_variance_norm(content) + mean
-
-
-
     """
-    def __init__(self, v_dim, qk_dim):
-        super(AdaAttN, self).__init__()
-        self.f = nn.Conv2d(qk_dim, qk_dim, 1)
-        self.g = nn.Conv2d(qk_dim, qk_dim, 1)
-        self.h = nn.Conv2d(v_dim, v_dim, 1)
 
-    def forward(self, c_x, s_x, c_1x, s_1x):
-        Q = self.f(mean_variance_norm(c_1x))
+    def forward(self, content, style, content_key, style_key):
+        Q = self.f(mean_variance_norm(content_key))
         Q = Q.flatten(-2, -1).transpose(1, 2)
-        K = self.g(mean_variance_norm(s_1x))
+        K = self.g(mean_variance_norm(style_key))
         K = K.flatten(-2, -1)
-        V = self.h(s_x)
+        V = self.h(style)
         V = V.flatten(-2, -1).transpose(1, 2)
-        A = torch.softmax(torch.bmm(Q, K), -1)
+        A = self.sm(torch.bmm(Q, K))
         M = torch.bmm(A, V)
         Var = torch.bmm(A, V ** 2) - M ** 2
         S = torch.sqrt(Var.clamp(min=0))
-        M = M.transpose(1, 2).view(c_x.size())
-        S = S.transpose(1, 2).view(c_x.size())
-        return S * mean_variance_norm(c_x) + M
- 
+        M = M.transpose(1, 2).view(content.size())
+        S = S.transpose(1, 2).view(content.size())
+        return S * mean_variance_norm(content) + M
     """
+ 
 
 class Transformer(nn.Module):
 

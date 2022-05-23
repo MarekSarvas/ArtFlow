@@ -219,3 +219,27 @@ class Flow(nn.Module):
         input = self.actnorm.reverse(input)
 
         return input
+
+# This module is used n-times right after the squeeze layer to possibly mitigate the checkerboard
+# artifacts..
+class TransitionFlow(nn.Module):
+    def __init__(self, in_channel, conv_lu=True):
+        super().__init__()
+
+        self.actnorm = ActNorm(in_channel)
+
+        if conv_lu:
+            self.invconv = InvConv2dLU(in_channel)
+        else:
+            self.invconv = InvConv2d(in_channel)
+            
+    def forward(self, input):
+        input = self.actnorm(input)
+        input = self.invconv(input)
+        return input
+
+    def reverse(self, input):
+        input = self.invconv.reverse(input)
+        input = self.actnorm.reverse(input)
+
+        return input
