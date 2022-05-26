@@ -9,11 +9,14 @@ from os.path import splitext
 from torchvision import transforms
 from torchvision.utils import save_image
 from pathlib import Path
-
+import torch.utils.data as data
+from sampler import InfiniteSamplerWrapper
 
 import time
 import numpy as np
 import random
+
+import matplotlib.pyplot as plt
 
 
 def test_transform(img, size):
@@ -42,16 +45,23 @@ def train_transform():
 
 
 class FlatFolderDataset(data.Dataset):
-    def __init__(self, root, transform):
+    def __init__(self, root, transform, size, train):
         super(FlatFolderDataset, self).__init__()
         self.root = root
         self.paths = os.listdir(self.root)
         self.transform = transform
+        self.size = size
+        self.train = train
 
     def __getitem__(self, index):
         path = self.paths[index]
-        img = Image.open(os.path.join(self.root, path)).convert('RGB')
-        img = self.transform(img)
+        if self.train:
+            img = Image.open(os.path.join(self.root, path)).convert('RGB')
+            img = self.transform()(img)
+        else:
+            img = Image.open(os.path.join(self.root, path)).convert('RGB')
+            img = self.transform(img, self.size)(img)
+
         return img
 
     def __len__(self):
@@ -61,11 +71,40 @@ class FlatFolderDataset(data.Dataset):
         return 'FlatFolderDataset'
 
 
-def adjust_learning_rate(optimizer, iteration_count):
-    """Imitating the original implementation"""
-    lr = args.lr / (1.0 + args.lr_decay * iteration_count)
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+def style_interpolation(z1, z2, n):
+    print("Style 1: ", z1.shape)
+    print("Style 2: ", z2.shape)
+    step = 1/n
+    z_new = [z1]
+    p = 0+step
+    for _ in range(n-2):
+        z_tmp = p*z2 + (1-p)*z1 
+        z_new.append(z_tmp)
+        p = p+step
+    z_new.append(z2)
+    return z_new
+
+
+def plot_interpolation(imgs, save_path, show=True):
+    num_imgs = len(imgs[1])+2
+    fig, axs = plt.subplots(1, num_imgs, figsize=(14,6))
+
+    for i in range(num_imgs):
+        if i == 0:
+            axs[i].imshow(imgs[0][0].numpy().transpose((1,2,0)), interpolation='nearest')
+        elif i == num_imgs-1:
+            axs[i].imshow(imgs[2][0].numpy().transpose((1,2,0)), interpolation='nearest')
+        else:
+            axs[i].imshow(imgs[1][i-1][0].numpy().transpose((1,2,0)), interpolation='nearest')
+        axs[i].axes.xaxis.set_visible(False)
+        axs[i].axes.yaxis.set_visible(False)
+    fig.suptitle('Interpolation between 2 styles') 
+    plt.tight_layout() 
+    if show:
+        plt.show()
+    plt.savefig(save_path)
+    pass
+
 
 parser = argparse.ArgumentParser()
 # Basic options
@@ -100,9 +139,16 @@ parser.add_argument('--n_block', default=2, type=int, help='number of blocks')# 
 parser.add_argument('--no_lu', action='store_true', help='use plain convolution instead of LU decomposed version')
 parser.add_argument('--affine', default=False, type=bool, help='use affine coupling instead of additive')
 
-args = parser.parse_args()
+# additional args
+parser.add_argument("--gpu", default=True, type=bool)
+parser.add_argument("--batch_size", default=1, type=int)
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+args = parser.parse_args()
+if args.gpu:
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+else:
+    device = torch.device("cpu")
 
 if args.operator == 'wct':
     from glow_wct import Glow
@@ -137,107 +183,80 @@ if os.path.isfile(args.decoder):
     glow.load_state_dict(checkpoint['state_dict'])
     print("=> loaded checkpoint '{}'".format(args.decoder))
 else:
-    print("--------Wrong path to the model---------")
-    exit(1)
+    print("--------No checkpoints---------")
 glow = glow.to(device)
 
 glow.eval()
 
 # -----------------------start------------------------
-content_tf = train_transform()
-style_tf = train_transform()
+train = True
+if train:
+    content_tf = train_transform
+    style_tf = train_transform
+else:
+    content_tf = test_transform
+    style_tf = test_transform
 
-content_dataset = FlatFolderDataset(args.content_dir, content_tf)
-style_dataset = FlatFolderDataset(args.style_dir, style_tf)
+content_dataset = FlatFolderDataset(args.content_dir, content_tf, args.size, train)
+style_dataset = FlatFolderDataset(args.style_dir, style_tf, args.size, train)
 
 content_iter = iter(data.DataLoader(
     content_dataset, batch_size=args.batch_size,
-    sampler=InfiniteSamplerWrapper(content_dataset),
-    num_workers=args.n_threads))
+    sampler=InfiniteSamplerWrapper(content_dataset)))
 style_iter = iter(data.DataLoader(
     style_dataset, batch_size=args.batch_size,
-    sampler=InfiniteSamplerWrapper(style_dataset),
-    num_workers=args.n_threads))
+    sampler=InfiniteSamplerWrapper(style_dataset)))
 
-optimizer = torch.optim.Adam(glow.module.parameters(), lr=args.lr)
-if args.resume:
-    if os.path.isfile(args.resume):
-        optimizer.load_state_dict(checkpoint['optimizer'])
 
-log_c = []
-log_s = []
-log_mse = []
-Time = time.time()
-# -----------------------training------------------------
-for i in range(args.start_iter, args.max_iter):
-    adjust_learning_rate(optimizer, iteration_count=i)
-    content_images = next(content_iter).to(device)
-    style_images = next(style_iter).to(device)
+#breakpoint()
+for i in range(3):
+    with torch.no_grad():
+        content = next(content_iter).to(device)
+        style1 = next(style_iter).to(device)
+        style2 = next(style_iter).to(device)
 
-    # glow forward: real -> z_real, style -> z_style
-    if i == args.start_iter:
+        z_c = glow(content, forward=True)
+        z_s1 = glow(style1, forward=True)
+        z_s2 = glow(style2, forward=True)
+
+        z_combined = style_interpolation(z_s1, z_s2, 5) 
+        outputs = []
+        for j in range(len(z_combined)):
+            output = glow(z_c, forward=False, style=z_combined[j])
+            output = output.cpu()
+            outputs.append(output)
+
+        output_name = output_dir / "interpolation_{}{:s}".format(i, args.save_ext)
+        print(output_name)
+       # breakpoint()
+        plot_interpolation([style1, outputs, style2], output_name)
+        #save_image(output, str(output_name))
+
+exit(69)
+for content_path in content_paths:
+    for style_path in style_paths:
         with torch.no_grad():
-            _ = glow.module(content_images, forward=True)
-            continue
+            content = Image.open(str(content_path)).convert('RGB') 
+            img_transform = test_transform(content, args.size)
+            content = img_transform(content)  
+            content = content.to(device).unsqueeze(0)
 
-    # (log_p, logdet, z_outs) = glow()
-    z_c = glow(content_images, forward=True)
-    z_s = glow(style_images, forward=True)
-    # reverse 
-    stylized = glow(z_c, forward=False, style=z_s)
+            style = Image.open(str(style_path)).convert('RGB')
+            img_transform = test_transform(style, args.size)
+            style = img_transform(style) 
+            style = style.to(device).unsqueeze(0)
 
-    loss_c, loss_s = encoder(content_images, style_images, stylized)
-    loss_c = loss_c.mean()
-    loss_s = loss_s.mean()
-    loss_mse = mseloss(content_images, stylized)
-    loss_style = args.content_weight*loss_c + args.style_weight*loss_s + args.mse_weight*loss_mse
+            # content/style ---> z ---> stylized
+            z_c = glow(content, forward=True)
+            z_s = glow(style, forward=True)
+            output = glow(z_c, forward=False, style=z_s)
+            output = output.cpu()
+            output_name = output_dir / '{:s}_stylized_{:s}{:s}'.format(content_path.stem, style_path.stem, args.save_ext)
+            print(output_name)
+            save_image(output, str(output_name))
 
-    # optimizer update
-    optimizer.zero_grad()
-    loss_style.backward()
-    nn.utils.clip_grad_norm(glow.module.parameters(), 5)
-    optimizer.step()
-    
-    # update loss log
-    log_c.append(loss_c.item())
-    log_s.append(loss_s.item())
-    log_mse.append(loss_mse.item())
 
-    # save image
-    if i % args.print_interval == 0:
-        with torch.no_grad():
-            # stylized ---> z ---> content
-            z_stylized = glow(stylized, forward=True)
-            real = glow(z_stylized, forward=False, style=z_c)
-            
-            # pick another content
-            another_content = next(content_iter).to(device)
 
-            # stylized ---> z ---> another real
-            z_ac = glow(another_content, forward=True)
-            another_real = glow(z_stylized, forward=False, style=z_ac)
 
-        output_name = os.path.join(args.save_dir, "%06d.jpg" % i)
-        output_images = torch.cat((content_images.cpu(), style_images.cpu(), stylized.cpu(), 
-                                    real.cpu(), another_content.cpu(), another_real.cpu()), 
-                                  0)
-        save_image(output_images, output_name, nrow=args.batch_size)
-        
-        print("iter %d   time/iter: %.2f   loss_c: %.3f   loss_s: %.3f   loss_mse: %.3f" % (i, 
-                                                                      (time.time()-Time)/args.print_interval, 
-                                                                      np.mean(np.array(log_c)), np.mean(np.array(log_s)),
-                                                                      np.mean(np.array(log_mse))
-                                                                       ))
-        log_c = []
-        log_s = []
-        Time = time.time()
 
-        
-    if (i + 1) % args.save_model_interval == 0 or (i + 1) == args.max_iter:
-        state_dict = glow.module.state_dict()
-        for key in state_dict.keys():
-            state_dict[key] = state_dict[key].to(torch.device('cpu'))
-
-        state = {'iter': i, 'state_dict': state_dict, 'optimizer': optimizer.state_dict()}
-        torch.save(state, args.resume)
 
