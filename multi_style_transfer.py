@@ -100,9 +100,9 @@ def plot_interpolation(imgs, save_path, show=True):
         axs[i].axes.yaxis.set_visible(False)
     fig.suptitle('Interpolation between 2 styles') 
     plt.tight_layout() 
+    plt.savefig(save_path)
     if show:
         plt.show()
-    plt.savefig(save_path)
     pass
 
 
@@ -126,7 +126,7 @@ parser.add_argument('--size', type=int, default=256,
                     keeping the original size if set to 0')
 parser.add_argument('--crop', action='store_true',
                     help='do center crop to create squared image')
-parser.add_argument('--save_ext', default='.jpg',
+parser.add_argument('--save_ext', default='.pdf',
                     help='The extension name of the output image')
 parser.add_argument('--output', type=str, default='output',
                     help='Directory to save the output image(s)')
@@ -178,7 +178,7 @@ glow = Glow(3, args.n_flow, args.n_block, affine=args.affine, conv_lu=not args.n
 # -----------------------resume training------------------------
 if os.path.isfile(args.decoder):
     print("--------Load trained model----------")
-    checkpoint = torch.load(args.decoder)
+    checkpoint = torch.load(args.decoder, map_location=device)
     args.start_iter = checkpoint['iter']
     glow.load_state_dict(checkpoint['state_dict'])
     print("=> loaded checkpoint '{}'".format(args.decoder))
@@ -225,12 +225,13 @@ for i in range(3):
             output = glow(z_c, forward=False, style=z_combined[j])
             output = output.cpu()
             outputs.append(output)
-
+        
         output_name = output_dir / "interpolation_{}{:s}".format(i, args.save_ext)
+        output_c = output_dir / "content{}.{}".format(i, args.save_ext)
         print(output_name)
        # breakpoint()
         plot_interpolation([style1, outputs, style2], output_name)
-        #save_image(output, str(output_name))
+        save_image(content, str(output_c))
 
 exit(69)
 for content_path in content_paths:
