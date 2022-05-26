@@ -76,26 +76,34 @@ def style_interpolation(z1, z2, n):
     print("Style 2: ", z2.shape)
     step = 1/n
     z_new = [z1]
+    titles = ["Style A", "1 : 0"]
     p = 0+step
     for _ in range(n-2):
         z_tmp = p*z2 + (1-p)*z1 
         z_new.append(z_tmp)
         p = p+step
+        titles.append("{:.1f} : {:.1f}".format(1-p, p))
     z_new.append(z2)
-    return z_new
+    titles.append("0 : 1")
+    titles.append("Style B")
+
+    return z_new, titles
 
 
-def plot_interpolation(imgs, save_path, show=True):
+def plot_interpolation(imgs, save_path, titles, show=True):
     num_imgs = len(imgs[1])+2
-    fig, axs = plt.subplots(1, num_imgs, figsize=(14,6))
+    fig, axs = plt.subplots(1, num_imgs, figsize=(16,4))
 
     for i in range(num_imgs):
         if i == 0:
             axs[i].imshow(imgs[0][0].numpy().transpose((1,2,0)), interpolation='nearest')
+            axs[i].set_title(titles[i])
         elif i == num_imgs-1:
-            axs[i].imshow(imgs[2][0].numpy().transpose((1,2,0)), interpolation='nearest')
+            axs[i].imshow(imgs[2][0].numpy().transpose((1,2,0)), interpolation='spline16')
+            axs[i].set_title(titles[i])
         else:
-            axs[i].imshow(imgs[1][i-1][0].numpy().transpose((1,2,0)), interpolation='nearest')
+            axs[i].imshow(imgs[1][i-1][0].numpy().transpose((1,2,0)), interpolation='lanczos')
+            axs[i].set_title(titles[i])
         axs[i].axes.xaxis.set_visible(False)
         axs[i].axes.yaxis.set_visible(False)
     fig.suptitle('Interpolation between 2 styles') 
@@ -189,7 +197,7 @@ glow = glow.to(device)
 glow.eval()
 
 # -----------------------start------------------------
-train = True
+train = False
 if train:
     content_tf = train_transform
     style_tf = train_transform
@@ -197,8 +205,11 @@ else:
     content_tf = test_transform
     style_tf = test_transform
 
-content_dataset = FlatFolderDataset(args.content_dir, content_tf, args.size, train)
-style_dataset = FlatFolderDataset(args.style_dir, style_tf, args.size, train)
+content_tf = test_transform
+style_tf = train_transform
+
+content_dataset = FlatFolderDataset(args.content_dir, content_tf, args.size, False)
+style_dataset = FlatFolderDataset(args.style_dir, style_tf, args.size, True)
 
 content_iter = iter(data.DataLoader(
     content_dataset, batch_size=args.batch_size,
@@ -209,7 +220,9 @@ style_iter = iter(data.DataLoader(
 
 
 #breakpoint()
-for i in range(3):
+prev=0
+for i in range(20):
+    i += prev
     with torch.no_grad():
         content = next(content_iter).to(device)
         style1 = next(style_iter).to(device)
@@ -219,42 +232,21 @@ for i in range(3):
         z_s1 = glow(style1, forward=True)
         z_s2 = glow(style2, forward=True)
 
-        z_combined = style_interpolation(z_s1, z_s2, 5) 
+        z_combined, titles = style_interpolation(z_s1, z_s2, 5) 
         outputs = []
         for j in range(len(z_combined)):
             output = glow(z_c, forward=False, style=z_combined[j])
             output = output.cpu()
             outputs.append(output)
         
-        output_name = output_dir / "interpolation_{}{:s}".format(i, args.save_ext)
+        output_name = output_dir / "interpolation_{}_8_2_model{:s}".format(i, args.save_ext)
         output_c = output_dir / "content{}.{}".format(i, args.save_ext)
         print(output_name)
        # breakpoint()
-        plot_interpolation([style1, outputs, style2], output_name)
+        plot_interpolation([style1, outputs, style2], output_name, titles, show=False)
         save_image(content, str(output_c))
 
 exit(69)
-for content_path in content_paths:
-    for style_path in style_paths:
-        with torch.no_grad():
-            content = Image.open(str(content_path)).convert('RGB') 
-            img_transform = test_transform(content, args.size)
-            content = img_transform(content)  
-            content = content.to(device).unsqueeze(0)
-
-            style = Image.open(str(style_path)).convert('RGB')
-            img_transform = test_transform(style, args.size)
-            style = img_transform(style) 
-            style = style.to(device).unsqueeze(0)
-
-            # content/style ---> z ---> stylized
-            z_c = glow(content, forward=True)
-            z_s = glow(style, forward=True)
-            output = glow(z_c, forward=False, style=z_s)
-            output = output.cpu()
-            output_name = output_dir / '{:s}_stylized_{:s}{:s}'.format(content_path.stem, style_path.stem, args.save_ext)
-            print(output_name)
-            save_image(output, str(output_name))
 
 
 
