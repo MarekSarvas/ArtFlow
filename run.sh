@@ -3,8 +3,8 @@
 #
 # =================== Train configs ====================
 
-stage=3
-stop_stage=3
+stage=4
+stop_stage=4
 verbose=0
 ngpus=1
  
@@ -40,8 +40,8 @@ if [ ${stage} -le 2 ] &&[ ${stop_stage} -ge 2 ]; then
         --content_dir "${CONTENT_PATH}"  \
         --style_dir "${STYLE_PATH}" \
         --size 256 \
-        --n_flow 8 --n_block 2 
-        --operator wct 
+        --n_flow 8 --n_block 2 \
+        --operator wct  \
         --decoder experiments/ArtFlow-AdaIN/glow.pth \
         --output output_ArtFlow-AdaIN
 fi
@@ -52,7 +52,7 @@ if [ ${stage} -le 3 ] &&[ ${stop_stage} -ge 3 ]; then
         --content_dir "${TRAIN_DATA_PATH}/coco"  \
         --style_dir "${TRAIN_DATA_PATH}/wikiart" \
         --save_dir=${EXP_FOLDER}/${exp_id} \
-        --n_flow 8       \
+        --n_flow 4       \
         --n_block 2      \
         --batch_size 1   \
         --operator att
@@ -60,13 +60,14 @@ fi
 # TODO: update parameters
 if [ ${stage} -le 4 ] &&[ ${stop_stage} -ge 4 ]; then
    echo "stage 4: Test Glow with AdaAttN"
-    python -u test.py \
+   export CUDA_VISIBLE_DEVICES=0
+   python -u test.py \
         --content_dir "${CONTENT_PATH}"  \
         --style_dir "${STYLE_PATH}" \
-        --save_dir=${EXP_FOLDER}/${exp_id} \
-        --size 256 \
-        --n_flow 8 --n_block 2 
-        --operator wct 
-        --decoder experiments/ArtFlow-AdaIN/glow.pth \
-        --output output_ArtFlow-AdaIN
+        --size 512 \
+        --n_flow 8 --n_block 2 --n_trans 2 --max_sample 96 \
+        --operator att \
+        --decoder experiment/glow.pth \
+        --output output_first_test_transition_8_2_96
 fi
+
