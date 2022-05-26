@@ -13,7 +13,8 @@ import argparse
 """
 
 
-models = ['vgg19', 'densenet161', 'resnet152']
+models = ['alexnet', 'vgg11', 'vgg13', 'vgg16',
+          'vgg19', 'vgg19_bn', 'densenet161', 'inception_v3', 'resnet152', ]
 imsize = 299
 use_cuda = True
 
