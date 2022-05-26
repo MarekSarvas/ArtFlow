@@ -82,7 +82,7 @@ parser.add_argument('--content_weight', type=float, default=0.1)
 # save options
 parser.add_argument('--n_threads', type=int, default=8)
 parser.add_argument('--print_interval', type=int, default=100)
-parser.add_argument('--save_model_interval', type=int, default=5000)
+parser.add_argument('--save_model_interval', type=int, default=500)
 parser.add_argument('--start_iter', type=int, default=0, help='starting iteration')
 parser.add_argument('--resume', default='glow.pth', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
@@ -219,7 +219,7 @@ for i in range(args.start_iter, args.max_iter):
 
             # stylized ---> z ---> another real
             z_ac = glow(another_content, forward=True)
-            another_real = glow(z_stylized, forward=False, style=z_ac)
+            another_real = glow(z_ac, forward=False, style=z_stylized)
 
         output_name = os.path.join(args.save_dir, "%06d.jpg" % i)
         output_images = torch.cat((content_images.cpu(), style_images.cpu(), stylized.cpu(), 
