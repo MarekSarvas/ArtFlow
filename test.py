@@ -62,7 +62,9 @@ parser.add_argument('--output', type=str, default='output',
 parser.add_argument('--operator', type=str, default='adain',
                     help='style feature transfer operator')
 parser.add_argument('--n_flow', default=8, type=int, help='number of flows in each block')# 32
+parser.add_argument('--n_trans', default=0, type=int, help='number of transition layers in each block')# 32
 parser.add_argument('--n_block', default=2, type=int, help='number of blocks')# 4
+parser.add_argument('--max_sample', default=256, type=int, help='maximum adaattn key size')# 32
 parser.add_argument('--no_lu', action='store_true', help='use plain convolution instead of LU decomposed version')
 parser.add_argument('--affine', default=False, type=bool, help='use affine coupling instead of additive')
 
@@ -93,7 +95,10 @@ style_dir = Path(args.style_dir)
 style_paths = [f for f in style_dir.glob('*')]
 
 # glow
-glow = Glow(3, args.n_flow, args.n_block, affine=args.affine, conv_lu=not args.no_lu)
+if args.operator == 'att':
+    glow = Glow(3, args.n_flow, args.n_block, affine=args.affine, conv_lu=not args.no_lu, max_sample=args.max_sample**2, n_trans=args.n_trans)
+else:
+    glow = Glow(3, args.n_flow, args.n_block, affine=args.affine, conv_lu=not args.no_lu)
 
 # -----------------------resume training------------------------
 if os.path.isfile(args.decoder):

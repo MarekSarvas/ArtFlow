@@ -9,7 +9,7 @@ from glow_blocks.style_trans_modules import AdaIN
 from glow_blocks.adaAttN import AdaAttN
 
 class Block(nn.Module):
-    def __init__(self, in_channel, n_flow, affine=True, conv_lu=True, n_transitions=2):
+    def __init__(self, in_channel, n_flow, affine=True, conv_lu=True, n_transitions=0):
         super().__init__()
 
         squeeze_dim = in_channel * 4
@@ -54,19 +54,20 @@ class Block(nn.Module):
 
 
 class Glow(nn.Module):
-    def __init__(self, in_channel, n_flow, n_block, affine=True, conv_lu=True):
+    def __init__(self, in_channel, n_flow, n_block, affine=True, conv_lu=True, n_trans=0, max_sample=256*256):
         super().__init__()
 
         self.blocks = nn.ModuleList()
         n_channel = in_channel
         for i in range(n_block - 1):
-            self.blocks.append(Block(n_channel, n_flow, affine=affine, conv_lu=conv_lu))
+            self.blocks.append(Block(n_channel, n_flow, affine=affine, conv_lu=conv_lu, n_transitions=n_trans))
             n_channel *= 4
             
-        self.blocks.append(Block(n_channel, n_flow, affine=affine))
+        self.blocks.append(Block(n_channel, n_flow, affine=affine, n_transitions=n_trans))
         
         # FIXME: are the dimensions correct? parametrize them..
-        self.adaattn = AdaAttN(in_planes= 3 * (4**n_block), key_planes=3 * (4**n_block))
+        self.adaattn = AdaAttN(in_planes= 3 * (4**n_block),
+                key_planes=3 * (4**n_block), max_sample=max_sample)
         
     def forward(self, input, forward=True, style=None):
         if forward:
@@ -78,6 +79,45 @@ class Glow(nn.Module):
         z = input
         for block in self.blocks:
             z = block(z)
+        if style is not None:
+            z = self.adaattn(z, style, z, style)
+        return z
+
+    def _reverse(self, z, style=None):
+        out = z
+        if style is not None:
+            out = self.adaattn(out, style, out, style)
+        for i, block in enumerate(self.blocks[::-1]):
+            out = block.reverse(out)
+        return out
+
+class GlowIntermediate(nn.Module):
+    def __init__(self, in_channel, n_flow, n_block, affine=True, conv_lu=True):
+        super().__init__()
+
+        self.blocks = nn.ModuleList()
+        n_channel = in_channel
+        self.blocks.append(Block(n_channel, n_flow, affine=affine, conv_lu=conv_lu))
+        n_channel *= 4
+            
+        self.blocks.append(Block(n_channel, n_flow, affine=affine))
+        
+        # FIXME: are the dimensions correct? parametrize them..
+        self.adaattn1 = AdaAttN(in_planes= 3 * (4**n_block), key_planes=3 * (4**n_block))
+        self.adaattn2 = AdaAttN(in_planes= 3 * (4**n_block), key_planes=3 * (4**(n_block - 1)))
+        
+    def forward(self, input, forward=True, style=None):
+        if forward:
+            return self._forward(input, style=style)
+        else:
+            return self._reverse(input, style=style)
+
+    def _forward(self, input, style=None, return_intermediate=True):
+        z = input
+        intermediate = []
+        for block in self.blocks:
+            z = block(z)
+            intermediate.append(z)
         if style is not None:
             z = self.adaattn(z, style, z, style)
         return z
