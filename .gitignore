@@ -1,4 +1,6 @@
 data/train/
+output*/
+experiment/
 data/*.zip
 exp/
 __pycache__/

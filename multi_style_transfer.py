@@ -87,15 +87,15 @@ def style_interpolation(z1, z2, n):
 
 def plot_interpolation(imgs, save_path, show=True):
     num_imgs = len(imgs[1])+2
-    fig, axs = plt.subplots(1, num_imgs, figsize=(14,6))
+    fig, axs = plt.subplots(1, num_imgs, figsize=(20,10))
 
     for i in range(num_imgs):
         if i == 0:
-            axs[i].imshow(imgs[0][0].numpy().transpose((1,2,0)), interpolation='nearest')
+            axs[i].imshow(imgs[0][0].cpu().numpy().transpose((1,2,0)), interpolation='bilinear')
         elif i == num_imgs-1:
-            axs[i].imshow(imgs[2][0].numpy().transpose((1,2,0)), interpolation='nearest')
+            axs[i].imshow(imgs[2][0].cpu().numpy().transpose((1,2,0)), interpolation='bilinear')
         else:
-            axs[i].imshow(imgs[1][i-1][0].numpy().transpose((1,2,0)), interpolation='nearest')
+            axs[i].imshow(imgs[1][i-1][0].cpu().numpy().transpose((1,2,0)), interpolation='bilinear')
         axs[i].axes.xaxis.set_visible(False)
         axs[i].axes.yaxis.set_visible(False)
     fig.suptitle('Interpolation between 2 styles') 
@@ -135,6 +135,7 @@ parser.add_argument('--output', type=str, default='output',
 parser.add_argument('--operator', type=str, default='adain',
                     help='style feature transfer operator')
 parser.add_argument('--n_flow', default=8, type=int, help='number of flows in each block')# 32
+parser.add_argument('--n_trans', default=0, type=int, help='number of transition layers in each block')# 32
 parser.add_argument('--n_block', default=2, type=int, help='number of blocks')# 4
 parser.add_argument('--no_lu', action='store_true', help='use plain convolution instead of LU decomposed version')
 parser.add_argument('--affine', default=False, type=bool, help='use affine coupling instead of additive')
@@ -173,7 +174,10 @@ style_dir = Path(args.style_dir)
 style_paths = [f for f in style_dir.glob('*')]
 
 # glow
-glow = Glow(3, args.n_flow, args.n_block, affine=args.affine, conv_lu=not args.no_lu)
+if args.operator == 'att':
+    glow = Glow(3, args.n_flow, args.n_block, affine=args.affine, conv_lu=not args.no_lu, n_trans=args.n_trans)
+else:
+    glow = Glow(3, args.n_flow, args.n_block, affine=args.affine, conv_lu=not args.no_lu)
 
 # -----------------------resume training------------------------
 if os.path.isfile(args.decoder):
