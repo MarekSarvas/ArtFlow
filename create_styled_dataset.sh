@@ -1,0 +1,1 @@
+python3 create_imagenet_styled.py --content_dir data/eval/ILSVRC2012_img_val_subset/ --style_dir data/style --input_name ILSVRC2012_img_val_subset --output_name styled_AdaIN --output_dir data/eval/styled_AdaIN/ --size 256 --n_flow 8 --n_block 2 --operator wct --decoder experiments/ArtFlow-AdaIN/glow.pth  
