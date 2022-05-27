@@ -14,8 +14,11 @@ exp_id=test2
 MAIN_PATH=${PWD}
 TRAIN_DATA_PATH=${MAIN_PATH}/data/train
                                                
-STYLE_PATH=${MAIN_PATH}/data/style
-CONTENT_PATH=${MAIN_PATH}/data/content            
+STYLE_FOLDER=interpolation_data/style
+CONTENT_FOLDER=interpolation_data/content
+
+STYLE_PATH=${MAIN_PATH}/${STYLE_FOLDER}
+CONTENT_PATH=${MAIN_PATH}/${CONTENT_FOLDER}            
                                    
 EXP_FOLDER=${MAIN_PATH}/exp
 
@@ -61,13 +64,15 @@ fi
 if [ ${stage} -le 4 ] &&[ ${stop_stage} -ge 4 ]; then
    echo "stage 4: Test Glow with AdaAttN"
    export CUDA_VISIBLE_DEVICES=0
-   python -u test.py \
+   python3 -u test.py \
+        --gpu False \
+        --pad 64 \
         --content_dir "${CONTENT_PATH}"  \
         --style_dir "${STYLE_PATH}" \
-        --size 512 \
-        --n_flow 8 --n_block 2 --n_trans 2 --max_sample 96 \
+        --size 256 \
+        --n_flow 8 --n_block 2 --max_sample 96 \
         --operator att \
-        --decoder experiment/glow.pth \
-        --output output_first_test_transition_8_2_96
+        --decoder models/att_8_2.pth \
+        --output ${EXP_FOLDER}/adaatt_pad_8_2_96
 fi
 

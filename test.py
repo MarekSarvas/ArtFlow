@@ -68,9 +68,16 @@ parser.add_argument('--max_sample', default=256, type=int, help='maximum adaattn
 parser.add_argument('--no_lu', action='store_true', help='use plain convolution instead of LU decomposed version')
 parser.add_argument('--affine', default=False, type=bool, help='use affine coupling instead of additive')
 
+# additional arguments
+parser.add_argument('--gpu', default=True, type=bool)
+parser.add_argument('--pad', default=0, type=int)
+
 args = parser.parse_args()
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if args.gpu:
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+else:
+    device = torch.device("cpu")
 
 if args.operator == 'wct':
     from glow_wct import Glow
@@ -103,7 +110,7 @@ else:
 # -----------------------resume training------------------------
 if os.path.isfile(args.decoder):
     print("--------loading checkpoint----------")
-    checkpoint = torch.load(args.decoder)
+    checkpoint = torch.load(args.decoder, map_location=device)
     args.start_iter = checkpoint['iter']
     glow.load_state_dict(checkpoint['state_dict'])
     print("=> loaded checkpoint '{}'".format(args.decoder))
@@ -113,12 +120,14 @@ glow = glow.to(device)
 
 glow.eval()
 
+pad_size = args.pad
 # -----------------------start------------------------
 for content_path in content_paths:
     for style_path in style_paths:
         with torch.no_grad():
             content = Image.open(str(content_path)).convert('RGB')
             img_transform = test_transform(content, args.size)
+            
             content = img_transform(content)
             content = content.to(device).unsqueeze(0)
             
@@ -126,11 +135,19 @@ for content_path in content_paths:
             img_transform = test_transform(style, args.size)
             style = img_transform(style)
             style = style.to(device).unsqueeze(0)
-
+            
+            # padd
+            if args.pad != 0:
+                content = F.pad(content, (args.pad, args.pad, args.pad, args.pad))
+            
             # content/style ---> z ---> stylized 
             z_c = glow(content, forward=True)
             z_s = glow(style, forward=True)
             output = glow(z_c, forward=False, style=z_s)
+
+            if args.pad != 0:
+                output = output[:, :, args.pad:-args.pad, args.pad:-args.pad]
+
             output = output.cpu()
 
         output_name = output_dir / '{:s}_stylized_{:s}{:s}'.format(

@@ -6,3 +6,4 @@ exp/
 __pycache__/
 glow _blocks/__pycache__
 models/
+data/eval/
