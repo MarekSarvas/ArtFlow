@@ -96,13 +96,13 @@ def plot_interpolation(imgs, save_path, titles, show=True):
 
     for i in range(num_imgs):
         if i == 0:
-            axs[i].imshow(imgs[0][0].numpy().transpose((1,2,0)), interpolation='nearest')
+            axs[i].imshow(imgs[0][0].cpu().numpy().transpose((1,2,0)), interpolation='nearest')
             axs[i].set_title(titles[i])
         elif i == num_imgs-1:
-            axs[i].imshow(imgs[2][0].numpy().transpose((1,2,0)), interpolation='spline16')
+            axs[i].imshow(imgs[2][0].cpu().numpy().transpose((1,2,0)), interpolation='spline16')
             axs[i].set_title(titles[i])
         else:
-            axs[i].imshow(imgs[1][i-1][0].numpy().transpose((1,2,0)), interpolation='lanczos')
+            axs[i].imshow(imgs[1][i-1][0].cpu().numpy().transpose((1,2,0)), interpolation='lanczos')
             axs[i].set_title(titles[i])
         axs[i].axes.xaxis.set_visible(False)
         axs[i].axes.yaxis.set_visible(False)
