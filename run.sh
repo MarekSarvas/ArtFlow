@@ -14,8 +14,11 @@ exp_id=test2
 MAIN_PATH=${PWD}
 TRAIN_DATA_PATH=${MAIN_PATH}/data/train
                                                
-STYLE_PATH=${MAIN_PATH}/data/style
-CONTENT_PATH=${MAIN_PATH}/data/content            
+STYLE_FOLDER=interpolation_data/style
+CONTENT_FOLDER=interpolation_data/content
+
+STYLE_PATH=${MAIN_PATH}/${STYLE_FOLDER}
+CONTENT_PATH=${MAIN_PATH}/${CONTENT_FOLDER}            
                                    
 EXP_FOLDER=${MAIN_PATH}/exp
 
@@ -70,6 +73,6 @@ if [ ${stage} -le 4 ] &&[ ${stop_stage} -ge 4 ]; then
         --n_flow 8 --n_block 2 --max_sample 96 \
         --operator att \
         --decoder models/att_8_2.pth \
-        --output adaatt_pad_8_2_96
+        --output ${EXP_FOLDER}/adaatt_pad_8_2_96
 fi
 
