@@ -151,6 +151,7 @@ parser.add_argument('--affine', default=False, type=bool, help='use affine coupl
 # additional args
 parser.add_argument("--gpu", default=True, type=bool)
 parser.add_argument("--batch_size", default=1, type=int)
+parser.add_argument("--pad", default=0, type=int)
 
 
 args = parser.parse_args()
@@ -231,6 +232,9 @@ for i in range(20):
         content = next(content_iter).to(device)
         style1 = next(style_iter).to(device)
         style2 = next(style_iter).to(device)
+        
+        if args.pad != 0:
+            content = F.pad(content, (args.pad, args.pad, args.pad, args.pad))
 
         z_c = glow(content, forward=True)
         z_s1 = glow(style1, forward=True)
@@ -246,14 +250,13 @@ for i in range(20):
         output_name = output_dir / "interpolation_{}_8_2_model{:s}".format(i, args.save_ext)
         output_c = output_dir / "content{}.{}".format(i, args.save_ext)
         print(output_name)
-       # breakpoint()
-        plot_interpolation([style1, outputs, style2], output_name, titles, show=False)
+        
+        cropped = []
+        if args.pad != 0:
+            content = content[:, :, args.pad:-args.pad, args.pad:-args.pad]
+            for out in outputs:
+                cropped.append(out[:, :, args.pad:-args.pad, args.pad:-args.pad])
+
+        plot_interpolation([style1, cropped, style2], output_name, titles, show=False)
         save_image(content, str(output_c))
-
-exit(69)
-
-
-
-
-
 
