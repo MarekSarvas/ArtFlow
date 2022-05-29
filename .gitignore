@@ -2,6 +2,7 @@ data/train/
 output*/
 experiment/
 data/*.zip
+data/
 exp/
 __pycache__/
 glow _blocks/__pycache__
