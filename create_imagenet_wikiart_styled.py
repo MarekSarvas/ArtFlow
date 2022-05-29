@@ -1,0 +1,190 @@
+import argparse
+import os
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from PIL import Image
+from os.path import basename
+from os.path import splitext
+from torchvision import transforms
+from torchvision.utils import save_image
+from pathlib import Path
+
+
+import time
+import numpy as np
+import random
+
+
+def test_transform(img, size):
+    transform_list = []
+    h, w, _ = np.shape(img)
+    if h < w:
+        newh = size
+        neww = w/h*size
+    else:
+        neww = size
+        newh = h/w*size
+    neww = int(neww//4*4)
+    newh = int(newh//4*4)
+    transform_list.append(transforms.Resize((newh, neww)))
+    transform_list.append(transforms.ToTensor())
+    transform = transforms.Compose(transform_list)
+    return transform
+
+
+parser = argparse.ArgumentParser()
+# Basic options
+parser.add_argument('--content', type=str, default='input/content/golden_gate.jpg',
+                    help='File path to the content image')
+parser.add_argument('--content_dir', type=str, default='input/content',
+                    help='Directory path to a batch of content images')
+
+parser.add_argument('--style_txt', type=str, default="wiki_art_selected.txt")
+
+parser.add_argument('--style', type=str, default='input/style/la_muse.jpg',
+                    help='File path to the style image, or multiple style \
+                    images separated by commas if you want to do style \
+                    interpolation or spatial control')
+
+
+parser.add_argument('--style_dir', type=str, default='input/style',
+                    help='Directory path to a batch of style images')
+parser.add_argument('--decoder', type=str,
+                    default='experiments/decoder2.pth.tar')
+# Additional options
+parser.add_argument('--size', type=int, default=256,
+                    help='New size for the content and style images, \
+                    keeping the original size if set to 0')
+parser.add_argument('--crop', action='store_true',
+                    help='do center crop to create squared image')
+parser.add_argument('--save_ext', default='.jpg',
+                    help='The extension name of the output image')
+
+parser.add_argument('--input_name',  type=str, default='input_name',
+                    help='Directory to replace the name image(s)')
+parser.add_argument('--output_dir', type=str, default='output_dir',
+                    help='Directory to save the output image(s)')
+parser.add_argument('--output_name', type=str, default='output_name',
+                    help='Directory to save the output image(s)')
+
+# glow parameters
+parser.add_argument('--operator', type=str, default='adain',
+                    help='style feature transfer operator')
+parser.add_argument('--n_flow', default=8, type=int,
+                    help='number of flows in each block')  # 32
+parser.add_argument('--n_trans', default=0, type=int,
+                    help='number of transition layers in each block')  # 32
+parser.add_argument('--n_block', default=2, type=int,
+                    help='number of blocks')  # 4
+parser.add_argument('--max_sample', default=256, type=int,
+                    help='maximum adaattn key size')  # 32
+parser.add_argument('--no_lu', action='store_true',
+                    help='use plain convolution instead of LU decomposed version')
+parser.add_argument('--affine', default=False, type=bool,
+                    help='use affine coupling instead of additive')
+
+# additional arguments
+parser.add_argument('--gpu', default=True, type=bool)
+parser.add_argument('--pad', default=0, type=int)
+
+args = parser.parse_args()
+
+if args.gpu:
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+else:
+    device = torch.device("cpu")
+
+if args.operator == 'wct':
+    from glow_wct import Glow
+elif args.operator == 'adain':
+    from glow_adain import Glow
+elif args.operator == 'decorator':
+    from glow_decorator import Glow
+elif args.operator == 'att':
+    from glow_AdaAttN import Glow
+else:
+    raise('Not implemented operator', args.operator)
+
+output_dir = Path(args.output_dir)
+output_dir.mkdir(exist_ok=True, parents=True)
+
+assert (args.content or args.content_dir)
+assert (args.style or args.style_dir)
+
+content_dir = Path(args.content_dir)
+content_folder_paths = [folder for folder in content_dir.glob('*')]
+content_paths = []
+for folder in content_folder_paths:
+    for im in folder.glob('*'):
+        content_paths.append(im)
+
+
+with open(args.style_txt, 'r') as filehandle:
+    style_paths = filehandle.readlines()
+    style_paths = [line.rstrip() for line in style_paths]
+
+
+# glow
+if args.operator == 'att':
+    glow = Glow(3, args.n_flow, args.n_block, affine=args.affine,
+                conv_lu=not args.no_lu, max_sample=args.max_sample**2, n_trans=args.n_trans)
+else:
+    glow = Glow(3, args.n_flow, args.n_block,
+                affine=args.affine, conv_lu=not args.no_lu)
+
+# -----------------------resume training------------------------
+if os.path.isfile(args.decoder):
+    print("--------loading checkpoint----------")
+    checkpoint = torch.load(args.decoder, map_location=device)
+    args.start_iter = checkpoint['iter']
+    glow.load_state_dict(checkpoint['state_dict'])
+    print("=> loaded checkpoint '{}'".format(args.decoder))
+else:
+    print("--------no checkpoint found---------")
+glow = glow.to(device)
+
+glow.eval()
+
+pad_size = args.pad
+#    for style_path in style_paths:
+
+# -----------------------start------------------------
+for index in range(len(content_paths)):
+    content_path = content_paths[index]
+    style_path = style_paths[index % len(style_paths)]
+
+    with torch.no_grad():
+        content = Image.open(str(content_path)).convert('RGB')
+        img_transform = test_transform(content, args.size)
+
+        content = img_transform(content)
+        content = content.to(device).unsqueeze(0)
+
+        style = Image.open(str(style_path)).convert('RGB')
+        img_transform = test_transform(style, args.size)
+        style = img_transform(style)
+        style = style.to(device).unsqueeze(0)
+
+        # padd
+        if args.pad != 0:
+            content = F.pad(
+                content, (args.pad, args.pad, args.pad, args.pad))
+
+        # content/style ---> z ---> stylized
+        z_c = glow(content, forward=True)
+        z_s = glow(style, forward=True)
+        output = glow(z_c, forward=False, style=z_s)
+
+        if args.pad != 0:
+            output = output[:, :, args.pad:-args.pad, args.pad:-args.pad]
+
+        output = output.cpu()
+
+    output_name = str(content_path).replace(
+        str(args.input_name), str(args.output_name))
+    print(output_name)
+    Path(os.sep.join(output_name.split(os.sep)[
+        :-1])).mkdir(exist_ok=True, parents=True)
+
+    save_image(output, str(output_name))
