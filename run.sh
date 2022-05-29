@@ -3,8 +3,8 @@
 #
 # =================== Train configs ====================
 
-stage=4
-stop_stage=4
+stage=5
+stop_stage=5
 verbose=0
 ngpus=1
  
@@ -14,8 +14,8 @@ exp_id=test2
 MAIN_PATH=${PWD}
 TRAIN_DATA_PATH=${MAIN_PATH}/data/train
                                                
-STYLE_FOLDER=interpolation_data/style
-CONTENT_FOLDER=interpolation_data/content
+STYLE_FOLDER=comparison_data/style
+CONTENT_FOLDER=comparison_data/content
 
 STYLE_PATH=${MAIN_PATH}/${STYLE_FOLDER}
 CONTENT_PATH=${MAIN_PATH}/${CONTENT_FOLDER}            
@@ -60,19 +60,34 @@ if [ ${stage} -le 3 ] &&[ ${stop_stage} -ge 3 ]; then
         --batch_size 1   \
         --operator att
 fi
-# TODO: update parameters
+
 if [ ${stage} -le 4 ] &&[ ${stop_stage} -ge 4 ]; then
    echo "stage 4: Test Glow with AdaAttN"
    export CUDA_VISIBLE_DEVICES=0
    python3 -u test.py \
         --gpu False \
+        --pad 0 \
+        --content_dir "${CONTENT_PATH}"  \
+        --style_dir "${STYLE_PATH}" \
+        --size 256 \
+        --n_flow 8 --n_block 2 --n_trans 1  --max_sample 96 \
+        --operator att \
+        --decoder models/artflow_8_1_2.pth \
+        --output ${EXP_FOLDER}/adaatt_nopad_8_1_2_96
+fi
+
+if [ ${stage} -le 5 ] &&[ ${stop_stage} -ge 5 ]; then
+   echo "stage 4: Test Glow with AdaAttN"
+   export CUDA_VISIBLE_DEVICES=0
+   python3 -u comparison.py \
+        --gpu False \
         --pad 64 \
         --content_dir "${CONTENT_PATH}"  \
         --style_dir "${STYLE_PATH}" \
         --size 256 \
-        --n_flow 8 --n_block 2 --max_sample 96 \
+        --n_flow 8 --n_block 2 --n_trans 1  --max_sample 96 \
         --operator att \
-        --decoder models/att_8_2.pth \
-        --output ${EXP_FOLDER}/adaatt_pad_8_2_96
+        --decoder models/artflow_8_1_2.pth \
+        --output ${EXP_FOLDER}/comparison
 fi
 
